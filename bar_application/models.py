@@ -40,7 +40,7 @@ class UserProfile(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return "User Profile"
+        return "UserProfile"
 
     class Meta:
         verbose_name = 'Профиль клиента'
@@ -64,7 +64,7 @@ class JobProfile(models.Model):
 
 
     def __str__(self):
-        return "Job Profile"
+        return "JobProfile"
 
     class Meta:
         verbose_name = 'Профиль работника'

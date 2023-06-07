@@ -10,7 +10,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from telegram.utils.request import Request
 import re
 from datetime import datetime
-from .start_job_keyboard import start_keyboard
+from .start_keyboard import start_job_keyboard
 
 
 def start_job(update, context):
@@ -50,7 +50,7 @@ def handle_job_phone_number(update, context):
         # Отправляем информацию о работнике
         context.bot.send_message(chat_id=update.effective_chat.id, text='✅ Вы успешно зарегистрированы!')
         context.bot.send_message(chat_id=update.effective_chat.id, text=f'Ваш ID: {job_profile.external_id}', reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
-        start_keyboard(update, context)
+        start_job_keyboard(update, context)
 
 def scan_code(update, context):
     button_text = '🔳 Отсканировать QR-код'
@@ -80,7 +80,7 @@ def handle_menu_total(update, context):
 
         else:
             update.message.reply_text('🔴 Произошла ошибка. Пожалуйста, повторите попытку.')
-            start_keyboard(update, context)
+            start_job_keyboard(update, context)
 
 
         # Сбрасываем флаги ожидания
@@ -145,7 +145,7 @@ def handle_menu_total(update, context):
             reply_message += f"💵 Сумма текущего заказа: {user_profile.menu_total} руб.\n"
             # Отправляем информацию о пользователе
             context.bot.send_message(chat_id=update.effective_chat.id, text=reply_message)
-            start_keyboard(update, context)
+            start_job_keyboard(update, context)
         else:
             update.message.reply_text('🔴 Произошла ошибка. Пожалуйста, повторите попытку.')
 
@@ -154,7 +154,7 @@ def handle_menu_total(update, context):
         context.user_data.pop('user_profile', None)
 
     else:
-        start_keyboard(update, context)
+        start_job_keyboard(update, context)
 
 
 def instruction(update, context):

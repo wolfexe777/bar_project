@@ -11,7 +11,7 @@ from telegram.utils.request import Request
 from io import BytesIO
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from .start_keyboard import start_keyboard
+from .start_keyboard import start_keyboard, start_job_keyboard
 import re
 from datetime import datetime
 import decimal
@@ -21,6 +21,7 @@ import decimal
 """
 
 def start(update, context):
+    context.bot_data['state'] = 'start'
     user = update.effective_user
     user_id = user.id
 
@@ -31,53 +32,63 @@ def start(update, context):
                                  text='🟢 Вы уже зарегистрированы!')
     except UserProfile.DoesNotExist:
         # Отправляем запрос на номер телефона
-        context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, отправьте ваш номер телефона',
-                                 reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, отправьте ваш номер телефона', reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
         context.bot.send_message(chat_id=update.effective_chat.id, text='Для этого нажмите на кнопку "Отправить номер 📲"', reply_markup=ReplyKeyboardMarkup([[KeyboardButton('📲 Отправить номер', request_contact=True)]], resize_keyboard=True, one_time_keyboard=True))
         return
-
-    keyboard = [[KeyboardButton('🪪 Виртуальная карта'), KeyboardButton('👨‍💼 Профиль')], [KeyboardButton('📆 Афиша'), KeyboardButton('📗 Контакты')]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text='⤵️ Выберите действие:',
-                             reply_markup=reply_markup)
+    start_keyboard(update, context)
 
 def handle_phone_number(update, context):
-    user = update.effective_user
-    user_id = user.id
-    phone_number = update.effective_message.contact.phone_number
+    state = context.bot_data.get('state')
+    if state == 'start':
+        user = update.effective_user
+        user_id = user.id
+        phone_number = update.effective_message.contact.phone_number
 
-    # Проверяем, есть ли пользователь в базе данных
-    try:
-        user_profile = UserProfile.objects.get(external_id=user_id)
-        context.bot.send_message(chat_id=update.effective_chat.id, text='🟢 Вы уже зарегистрированы!')
-    except UserProfile.DoesNotExist:
+        # Проверяем, есть ли пользователь в базе данных
+        try:
+            user_profile = UserProfile.objects.get(external_id=user_id)
+            context.bot.send_message(chat_id=update.effective_chat.id, text='🟢 Вы уже зарегистрированы!')
+        except UserProfile.DoesNotExist:
 
-        # Создаем профиль пользователя
-        user_profile = UserProfile.objects.create(external_id=user_id, phone_number=phone_number)
+            # Создаем профиль пользователя
+            user_profile = UserProfile.objects.create(external_id=user_id, phone_number=phone_number)
+            # Создаем QR-код
+            qr_data = f'🆔 ID : {user_profile.external_id}' \
+                      f'📉 Скидка: {user_profile.discount_percentage}%'
 
-        # Создаем QR-код
-        qr_data = f'🆔 ID : {user_profile.external_id}' \
-                  f'📉 Скидка: {user_profile.discount_percentage}%'
+            # Генерация ключевой пары RSA
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            qr_code = create_signed_qr_code(user_profile, qr_data, private_key)
+            user_profile.qr_code = qr_code  # Привязываем QR-код к профилю пользователя
+            user_profile.save()
 
-        # Генерация ключевой пары RSA
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048
-        )
+            # Отправляем QR-код
+            context.bot.send_message(chat_id=update.effective_chat.id, text='✅ Вы успешно зарегистрированы!')
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'🆔 Ваш ID: {user_profile.external_id}\n🔳 Персональный QR-код: ',
+                                     reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+            context.bot.send_photo(chat_id=update.effective_chat.id, photo=open(qr_code, 'rb'))
+            context.bot.send_message(chat_id=update.effective_chat.id, text='📁 Данные будут доступны во вкладке "🪪 Виртуальная карта"')
+            start_keyboard(update, context)
+    elif state == 'start_job':
+        user = update.effective_user
+        user_id = user.id
+        phone_number = update.effective_message.contact.phone_number
 
-        qr_code = create_signed_qr_code(user_profile, qr_data, private_key)
-        user_profile.qr_code = qr_code  # Привязываем QR-код к профилю пользователя
-        user_profile.save()
+        # Проверяем, есть ли пользователь в базе данных
+        try:
+            job_profile = JobProfile.objects.get(external_id=user_id)
+            context.bot.send_message(chat_id=update.effective_chat.id, text='🟢 Вы уже зарегистрированы!')
+        except JobProfile.DoesNotExist:
+            # Создаем профиль пользователя
+            job_profile = JobProfile.objects.create(external_id=user_id, phone_number=phone_number)
+            job_profile.save()
 
-        # Отправляем QR-код
-        context.bot.send_message(chat_id=update.effective_chat.id, text='✅ Вы успешно зарегистрированы!')
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f'🆔 Ваш ID: {user_profile.external_id}\n🔳 Персональный QR-код: ',
-                                 reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
-        context.bot.send_photo(chat_id=update.effective_chat.id, photo=open(qr_code, 'rb'))
-        context.bot.send_message(chat_id=update.effective_chat.id, text='📁 Данные будут доступны во вкладке "🪪 Виртуальная карта"')
-        start_keyboard(update, context)
-
+            # Отправляем информацию о работнике
+            context.bot.send_message(chat_id=update.effective_chat.id, text='✅ Вы успешно зарегистрированы!')
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'Ваш ID: {job_profile.external_id}', reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+            start_job_keyboard(update, context)
+    else:
+        pass
 def create_signed_qr_code(user_profile, data, private_key,):
 
     # Создание цифровой подписи
@@ -90,19 +101,11 @@ def create_signed_qr_code(user_profile, data, private_key,):
         hashes.SHA256()
     )
     user_profile.signature = signature  # Сохраняем цифровую подпись в профиле пользователя
-
     user_profile.save()
-
     qr_data = f'{data}\nЦифровая подпись: {signature.hex()}'
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
+    qr = qrcode.QRCode(version=1,error_correction=qrcode.constants.ERROR_CORRECT_L,box_size=10,border=4)
     qr.add_data(data)
     qr.make(fit=True)
-
     qr_img = qr.make_image(fill_color="black", back_color="white")
     qr_bytes = BytesIO()
     qr_img.save(qr_bytes, format='PNG')
@@ -129,24 +132,19 @@ def virtual_card(update, context):
               f'Скидка: {user_profile.discount_percentage}%\n'
 
     # Генерация ключевой пары RSA
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048
-    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     qr_code = create_signed_qr_code(user_profile, qr_data, private_key)
     user_profile.qr_code = qr_code  # Привязываем QR-код к профилю пользователя
     user_profile.save()
 
     # Отправляем QR-код
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text=f'🆔 Ваш ID: {user_profile.external_id}\n🔳 Персональный QR-код:')
+    context.bot.send_message(chat_id=update.effective_chat.id, text=f'🆔 Ваш ID: {user_profile.external_id}\n🔳 Персональный QR-код:')
     context.bot.send_photo(chat_id=update.effective_chat.id, photo=open(qr_code, 'rb'))
     start_keyboard(update, context)
 
 def profile(update, context):
     user = update.effective_user
     user_id = user.id
-
     # Проверяем, есть ли пользователь в базе данных
     try:
         user_profile = UserProfile.objects.get(external_id=user_id)
@@ -154,10 +152,8 @@ def profile(update, context):
         context.bot.send_message(chat_id=update.effective_chat.id, text='🔴 Вы не зарегистрированы!')
         return
 
-    # Проверяем, является ли пользователь VIP
-
     message = ""
-
+    # Проверяем, является ли пользователь VIP
     if user_profile.is_special:
         message = "Вы VIP клиент ⭐️⭐️⭐️, Ваша скидка - 15%"
         message += f"\n🆔 Ваш ID: {user_profile.external_id}"
@@ -184,9 +180,7 @@ def profile(update, context):
                 remaining_amount = amount - user_profile.total_spent
                 message += f"\n📣 Для повышения скидки до {threshold}% необходимо потратить еще {remaining_amount} руб.\n"
                 break
-    # Отправляем сообщение
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
-
 
 # Публикация актуальных новостей на неделю
 def afisha(update, context):
@@ -205,50 +199,25 @@ def contacts(update, context):
 """
 
 def start_job(update, context):
+    context.bot_data['state'] = 'start_job'
     user = update.effective_user
     user_id = user.id
     # Проверяем, есть ли пользователь в базе данных
     try:
         job_profile = JobProfile.objects.get(external_id=user_id)
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text='Вы уже зарегистрированы!')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Вы уже зарегистрированы!')
     except JobProfile.DoesNotExist:
         # Отправляем запрос на номер телефона
-        context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, отправьте ваш номер телефона',
-                                 reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, отправьте ваш номер телефона', reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
         context.bot.send_message(chat_id=update.effective_chat.id, text='Для этого нажмите на кнопку "📲 Отправить номер"', reply_markup=ReplyKeyboardMarkup([[KeyboardButton('📲 Отправить номер', request_contact=True)]], resize_keyboard=True, one_time_keyboard=True))
         return
-
-    keyboard = [[KeyboardButton('🔳 Отсканировать QR-код'),KeyboardButton('👆 Ввести ID клиента')], [KeyboardButton('📋 Инструкция')]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    context.bot.send_message(chat_id=update.effective_chat.id,text='Выберите действие ⤵️:', reply_markup=reply_markup)
-
-
-def handle_job_phone_number(update, context):
-    user = update.effective_user
-    user_id = user.id
-    phone_number = update.effective_message.contact.phone_number
-
-    # Проверяем, есть ли пользователь в базе данных
-    try:
-        job_profile = JobProfile.objects.get(external_id=user_id)
-        context.bot.send_message(chat_id=update.effective_chat.id, text='🟢 Вы уже зарегистрированы!')
-    except JobProfile.DoesNotExist:
-        # Создаем профиль пользователя
-        job_profile = JobProfile.objects.create(external_id=user_id, phone_number=phone_number)
-        job_profile.save()
-
-        # Отправляем информацию о работнике
-        context.bot.send_message(chat_id=update.effective_chat.id, text='✅ Вы успешно зарегистрированы!')
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f'Ваш ID: {job_profile.external_id}', reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
+    start_job_keyboard(update, context)
 
 def scan_code(update, context):
     button_text = '🔳 Отсканировать QR-код'
     button_url = 'https://www.online-qr-scanner.com/'
-
     keyboard = [[InlineKeyboardButton(button_text, url=button_url)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-
     update.message.reply_text('Нажмите кнопку ниже, чтобы открыть сканер QR-кодов:', reply_markup=reply_markup)
 
 def add_menu_total_button(update, context):
@@ -267,11 +236,9 @@ def handle_menu_total(update, context):
             user_profile.menu_total = 0
             user_profile.save()
             update.message.reply_text(f'✅ Сумма текущего заказа успешно отменена. Текущая сумма заказа: {user_profile.menu_total} руб.')
-
         else:
             update.message.reply_text('🔴 Произошла ошибка. Пожалуйста, повторите попытку.')
-            start_keyboard(update, context)
-
+            start_job_keyboard(update, context)
 
         # Сбрасываем флаги ожидания
         context.user_data['waiting_for_menu_total'] = False
@@ -322,9 +289,7 @@ def handle_menu_total(update, context):
 
             # Сохраняем дату и время обновления меню
             user_profile.menu_total_timestamp = datetime.now()
-
             user_profile.save()
-
             update.message.reply_text(f'Сумма текущего заказа {user_profile.menu_total} руб. успешно добавлена.')
             vip_status = "VIP-клиент ⭐️⭐️⭐️" if user_profile.is_special else "Обычный клиент ⭐️"
             # Формируем информацию о пользователе
@@ -335,17 +300,14 @@ def handle_menu_total(update, context):
             reply_message += f"💵 Сумма текущего заказа: {user_profile.menu_total} руб.\n"
             # Отправляем информацию о пользователе
             context.bot.send_message(chat_id=update.effective_chat.id, text=reply_message)
-            start_keyboard(update, context)
+            start_job_keyboard(update, context)
         else:
             update.message.reply_text('🔴 Произошла ошибка. Пожалуйста, повторите попытку.')
-
         # Сбрасываем флаги ожидания
         context.user_data['waiting_for_menu_total'] = False
         context.user_data.pop('user_profile', None)
-
     else:
-        start_keyboard(update, context)
-
+        start_job_keyboard(update, context)
 
 def instruction(update, context):
     # Получение полного пути к файлу с инструкцией в папке media
@@ -353,51 +315,34 @@ def instruction(update, context):
 
     # Отправка документа и приглашение открыть файл
     with open(file_path, 'rb') as file:
-        context.bot.send_document(
-            chat_id=update.effective_chat.id,
-            document=file,
-            caption='Пожалуйста, откройте инструкцию для просмотра'
-        )
+        context.bot.send_document(chat_id=update.effective_chat.id,document=file,caption='Пожалуйста, откройте инструкцию для просмотра')
 
 class Command(BaseCommand):
     help = 'Телеграм-бот'
 
     def handle(self, *args, **options):
-        request = Request(
-            connect_timeout=0.5,
-            read_timeout=1.0,
-        )
-        bot = telegram.Bot(
-            request=request,
-            token=settings.TOKEN,
-        )
+        request = Request(connect_timeout=0.5,read_timeout=1.0)
+        bot = telegram.Bot(request=request,token=settings.TOKEN)
         print(bot.get_me())
-
-        updater = Updater(
-            bot=bot,
-            use_context=True,
-        )
+        updater = Updater(bot=bot,use_context=True)
         # Обработчики команд для пользователя
         dp = updater.dispatcher
         dp.add_handler(CommandHandler('start', start))
-        dp.add_handler(MessageHandler(Filters.text('🪪 Виртуальная карта'), virtual_card))
+        dp.add_handler(MessageHandler(Filters.contact, handle_phone_number))
         dp.add_handler(MessageHandler(Filters.text('‍👨‍💼 Профиль'), profile))
         dp.add_handler(MessageHandler(Filters.text('📆 Афиша'), afisha))
         dp.add_handler(MessageHandler(Filters.text('📗 Контакты'),contacts))
-        # Обработчик для получения номера телефона
-        dp.add_handler(MessageHandler(Filters.contact, handle_phone_number))
+        dp.add_handler(MessageHandler(Filters.text('🪪 Виртуальная карта'),virtual_card))
 
-        # обработчики команд для работников
+        # обработчики команд для работника
         dp.add_handler(CommandHandler('start_job', start_job))
         dp.add_handler(MessageHandler(Filters.text('🔳 Отсканировать QR-код'), scan_code))
         dp.add_handler(MessageHandler(Filters.text('📋 Инструкция'), instruction))
         dp.add_handler(MessageHandler(Filters.text('👆 Ввести ID клиента'), add_menu_total_button))
         dp.add_handler(MessageHandler(Filters.text, handle_menu_total))
-        dp.add_handler(MessageHandler(Filters.contact, handle_job_phone_number))
 
         updater.start_polling()
         updater.idle()
-
 
 if __name__ == '__main__':
     command = Command()
