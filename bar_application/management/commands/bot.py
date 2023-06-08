@@ -15,6 +15,7 @@ from .start_keyboard import start_keyboard, start_job_keyboard
 import re
 from datetime import datetime
 import decimal
+import cv2
 
 """
 КОД КЛИЕНТА
@@ -221,11 +222,20 @@ def scan_code(update, context):
     update.message.reply_text('Нажмите кнопку ниже, чтобы открыть сканер QR-кодов:', reply_markup=reply_markup)
 
 def add_menu_total_button(update, context):
-    keyboard = [[KeyboardButton('❌ Удалить сумму текущего заказа')]]
+    keyboard = [
+        [KeyboardButton('❌ Удалить сумму текущего заказа')],
+        [KeyboardButton('↩️ Назад')]
+    ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, введите ID клиента.', reply_markup=reply_markup)
     # Устанавливаем флаг ожидания ID клиента
     context.user_data['waiting_for_id'] = True
+
+def cancel_operation(update, context):
+    start_job_keyboard(update, context)
+    # Сбрасываем флаги ожидания
+    context.user_data['waiting_for_id'] = False
+    context.user_data['waiting_for_menu_total'] = False
 
 def handle_menu_total(update, context):
     if update.message.text == '❌ Удалить сумму текущего заказа':
@@ -334,12 +344,15 @@ class Command(BaseCommand):
         dp.add_handler(MessageHandler(Filters.text('📗 Контакты'),contacts))
         dp.add_handler(MessageHandler(Filters.text('🪪 Виртуальная карта'),virtual_card))
 
+
         # обработчики команд для работника
         dp.add_handler(CommandHandler('start_job', start_job))
         dp.add_handler(MessageHandler(Filters.text('🔳 Отсканировать QR-код'), scan_code))
         dp.add_handler(MessageHandler(Filters.text('📋 Инструкция'), instruction))
         dp.add_handler(MessageHandler(Filters.text('👆 Ввести ID клиента'), add_menu_total_button))
+        dp.add_handler(MessageHandler(Filters.text('↩️ Назад'), cancel_operation))
         dp.add_handler(MessageHandler(Filters.text, handle_menu_total))
+
 
         updater.start_polling()
         updater.idle()
