@@ -230,7 +230,7 @@ def add_menu_total_button(update, context):
         [KeyboardButton('↩️ Назад')]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, введите ID клиента.', reply_markup=reply_markup)
+    context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, введите 🆔 клиента.', reply_markup=reply_markup)
     # Устанавливаем флаг ожидания ID клиента
     context.user_data['waiting_for_id'] = True
 
