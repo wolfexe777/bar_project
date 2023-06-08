@@ -156,20 +156,23 @@ def profile(update, context):
     message = ""
     # Проверяем, является ли пользователь VIP
     if user_profile.is_special:
-        message = "Вы VIP клиент ⭐️⭐️⭐️, Ваша скидка - 15%"
+        message = "Статус: VIP клиент ⭐️⭐️⭐️"
+        message += "\nВаша скидка - 15%"
         message += f"\n🆔 Ваш ID: {user_profile.external_id}"
         message += f"\n💰 Общая сумма заказов: {user_profile.total_spent} руб."
         message += f"\n💵 Сумма текущего заказа: {user_profile.menu_total} руб."
     else:
         discount_percentage = user_profile.calculate_discount_percentage()
         if discount_percentage == 10:
-            message += f"🆔 Ваш ID: {user_profile.external_id}"
+            message = f"Cтатус: Привилегированный клиент ⭐️⭐️"
+            message += f"\n🆔 Ваш ID: {user_profile.external_id}"
             message += "\n📉 Ваша скидка максимальная - 10%"
             message += f"\n💰 Общая сумма заказов: {user_profile.total_spent} руб."
             message += f"\n💵 Сумма текущего заказа: {user_profile.menu_total} руб."
         else:
-            message += f"🆔 Ваш ID: {user_profile.external_id}"
-            message = f"\n📉 Текущая скидка: {discount_percentage}%"
+            message = f"Cтатус: Обычный клиент ⭐️"
+            message += f"\n🆔 Ваш ID: {user_profile.external_id}"
+            message += f"\n📉 Текущая скидка: {discount_percentage}%"
             message += f"\n💰 Общая сумма заказов: {user_profile.total_spent} руб."
             message += f"\n💵 Сумма текущего заказа: {user_profile.menu_total} руб."
 
