@@ -157,7 +157,7 @@ def profile(update, context):
     # Проверяем, является ли пользователь VIP
     if user_profile.is_special:
         message = "Статус: VIP клиент ⭐️⭐️⭐️"
-        message += "\nВаша скидка - 15%"
+        message += "\n📉 Ваша скидка - 15%"
         message += f"\n🆔 Ваш ID: {user_profile.external_id}"
         message += f"\n💰 Общая сумма заказов: {user_profile.total_spent} руб."
         message += f"\n💵 Сумма текущего заказа: {user_profile.menu_total} руб."
