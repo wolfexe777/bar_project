@@ -280,7 +280,7 @@ def handle_menu_total(update, context):
         context.user_data['user_profile'] = user_profile
         context.bot.send_message(chat_id=update.effective_chat.id, text='Пожалуйста, введите сумму текущего заказа или\n '
                                                                         'отмените введенную ранее сумму заказа, нажав на кнопку\n'
-                                                                        '"Удалить сумму текущего заказа"')
+                                                                        '"❌ Удалить сумму текущего заказа"')
         # Устанавливаем флаг ожидания суммы меню
         context.user_data['waiting_for_menu_total'] = True
 
