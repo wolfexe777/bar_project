@@ -129,8 +129,7 @@ def virtual_card(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text='🪪 Ваша виртуальная карта:')
 
     # Создаем QR-код
-    qr_data = f'ID : {user_profile.external_id}\n' \
-              f'Скидка: {user_profile.discount_percentage}%\n'
+    qr_data = f'ID : {user_profile.external_id}\n Скидка: {user_profile.discount_percentage}%\n'
 
     # Генерация ключевой пары RSA
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
